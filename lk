@@ -1,0 +1,64 @@
+---
+- name: "NANDAKUMAR"
+  hosts: localhost
+  become: true
+  tasks:
+    - name: Update all packages
+      apt:
+        name: '*'
+        state: latest
+        update_cache: no
+        force_apt_get: no
+
+    - name: Ensure a list of apt packages are installed
+      apt:
+        name: "{{ packages }}"
+        state: latest
+        update_cache: yes
+      vars:
+        packages:
+        - python3-pip
+        - docker-ce=18.06.1
+        
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt: update_cache=yes name=docker-ce state=latest
+    
+    - name: add user to docker group
+      ansible.builtin.user:
+        name: '{{ ansible_ssh_user }}'
+        groups: docker
+        append: yes
+
+    - name: Enable Docker CE service at startup
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    # - name: reset ssh connection to allow user changes to affect ansible user
+    #   ansible.builtin.meta:
+    #     reset_connection
+
+    - name: Check if swarm is already initialised
+      shell: |
+        docker info | grep "Swarm: active" | wc -l
+      register: swarm_checked
+    
+    - name: output debug
+      debug: var=swarm_checked
+
+    - name: Init Swarm
+      command: docker swarm init
+      when: swarm_checked.stdout == "0"
+
